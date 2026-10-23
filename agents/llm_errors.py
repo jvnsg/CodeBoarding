@@ -112,8 +112,13 @@ class LLMQuotaError(RuntimeError):
     def __init__(self, error: BaseException):
         self.telemetry_properties = llm_failure_properties(error)
         self.is_codeboarding_quota = _is_codeboarding_quota(error)
-        _, key_tail = current_provider_key_context()
-        if self.is_codeboarding_quota:
+        provider, key_tail = current_provider_key_context()
+        if provider == "chatgpt_plan":
+            message = (
+                "ChatGPT plan usage limit reached. Check ChatGPT Settings > Usage for your allowance and app limits. "
+                "No API-key billing fallback was used."
+            )
+        elif self.is_codeboarding_quota:
             message = (
                 "Your CodeBoarding quota is exhausted. "
                 "Buy a CodeBoarding license at https://codeboarding.org/pricing, "
@@ -150,7 +155,10 @@ def llm_failure_properties(exc: BaseException) -> dict:
 
 def is_quota_exhausted(exc: BaseException) -> bool:
     status = _status_code(exc)
-    quota_code = getattr(exc, "code", None) == "insufficient_quota" or "insufficient_quota" in str(exc)
+    quota_code = getattr(exc, "code", None) in {
+        "insufficient_quota",
+        "subscription_sharing_usage_limit_exceeded",
+    } or "insufficient_quota" in str(exc)
     return status == 402 or (status == 429 and quota_code)
 
 
@@ -210,6 +218,11 @@ def detect_auth_error(exc: BaseException, *, provider: str, key_tail: str) -> LL
         # A 403 can refuse one request (a router's moderation, a model the key may not use) while the same key
         # serves the rest, so the provider's own reason says more than a hint about the key.
         friendly = f"{provider} refused the request (HTTP 403): {provider_message[:500]}"
+    elif provider == "chatgpt_plan":
+        friendly = (
+            f"ChatGPT authorization was rejected{status_note}. Run `codeboarding auth chatgpt login` "
+            "and allow ChatGPT plan usage."
+        )
     elif key_tail == CODEBOARDING_KEY_TAIL:
         friendly = (
             f"CodeBoarding's hosted {provider} credentials were rejected{status_note}. This run used no key of "

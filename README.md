@@ -108,6 +108,21 @@ python -m infra.install
 python -m codeboarding_cli.main full --local /path/to/repo
 ```
 
+### Use your ChatGPT plan (experimental)
+
+This fork supports **Sign in with ChatGPT** for eligible plan usage, without an API key:
+
+```bash
+uv sync --frozen
+uv run codeboarding auth chatgpt login
+uv run codeboarding auth chatgpt test
+uv run codeboarding full --chatgpt-plan --local /path/to/repo --render html
+```
+
+See [the setup guide](docs/chatgpt-plan.md) for Windows commands, model selection,
+accounts, and limitations. Use the source checkout of this branch; the published
+PyPI package does not include this experimental provider.
+
 ### Use the packaged CLI
 
 The recommended install method is [pipx](https://pipx.pypa.io), which keeps the CLI in its own isolated environment:

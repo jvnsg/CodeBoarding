@@ -7,11 +7,12 @@ from pathlib import Path
 from agents.llm_config import CODEBOARDING_KEY_TAIL
 from agents.llm_errors import EXIT_AUTH_ERROR, EXIT_QUOTA_EXHAUSTED, LLMAuthError, LLMQuotaError
 from codeboarding_cli.bootstrap import resolve_local_run_paths
-from codeboarding_cli.commands import full_analysis, incremental_analysis, partial_analysis
+from codeboarding_cli.commands import chatgpt_auth, full_analysis, incremental_analysis, partial_analysis
+from infra.chatgpt_auth import AUTH_ENV, DEFAULT_AUTH_PATH, ChatGPTAuthError
 from output_generators import SUPPORTED_FORMATS, render as render_output
 from infra.utils import ANALYSIS_FILENAME
 
-_SUBCOMMANDS = {"full", "incremental", "partial"}
+_SUBCOMMANDS = {"full", "incremental", "partial", "auth"}
 # CodeBoarding-action/scripts/analyze_repository.py parses this prefix; keep it stable.
 _ERROR_PREFIX = "CodeBoarding: "
 logger = logging.getLogger(__name__)
@@ -33,6 +34,7 @@ def _build_shared_parser() -> argparse.ArgumentParser:
         help="Path to the binary directory for language servers (overrides ~/.codeboarding/servers/)",
     )
     shared.add_argument("--enable-monitoring", action="store_true", help="Enable monitoring")
+    shared.add_argument("--chatgpt-plan", action="store_true", help="Use your saved ChatGPT plan login")
     return shared
 
 
@@ -71,6 +73,7 @@ Examples:
     full_analysis.add_arguments(subparsers, parents=[shared])
     incremental_analysis.add_arguments(subparsers, parents=[shared])
     partial_analysis.add_arguments(subparsers, parents=[shared])
+    chatgpt_auth.add_arguments(subparsers)
     return parser
 
 
@@ -92,6 +95,11 @@ def _inject_default_subcommand(argv: list[str]) -> list[str]:
 
 def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None:
     try:
+        if args.command == "auth":
+            chatgpt_auth.run_from_args(args, parser)
+            return
+        if getattr(args, "chatgpt_plan", False):
+            os.environ.setdefault(AUTH_ENV, str(DEFAULT_AUTH_PATH))
         if args.command == "incremental":
             incremental_analysis.run_from_args(args, parser)
         elif args.command == "partial":
@@ -109,9 +117,13 @@ def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> None
                     repo_name=run_paths.project_name,
                     output_dir=run_paths.output_dir,
                 )
+    except ChatGPTAuthError as exc:
+        parser.exit(EXIT_AUTH_ERROR, f"CodeBoarding: {exc}\n")
     except LLMAuthError as exc:
         logger.error("%s%s", _ERROR_PREFIX, exc)
-        if exc.key_tail != CODEBOARDING_KEY_TAIL:
+        if exc.provider == "chatgpt_plan":
+            logger.error("Reconnect using `codeboarding auth chatgpt login` and check ChatGPT Settings > Usage.")
+        elif exc.key_tail != CODEBOARDING_KEY_TAIL:
             logger.error(
                 "Check your LLM provider API key (shell env or ~/.codeboarding/config.toml) and re-run.",
             )

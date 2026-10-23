@@ -94,6 +94,7 @@ class TestProviderSelection:
 
     def test_agent_model_defaults_remain_unchanged(self):
         assert {name: config.agent_model for name, config in LLM_PROVIDERS.items()} == {
+            "chatgpt_plan": "gpt-6.1-sol",
             "openai": "gpt-4o",
             "vercel": "google/gemini-3.8-flash",
             "anthropic": "claude-sonnet-5",

@@ -13,6 +13,8 @@ from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 
 from agents.constants import LLMDefaults, ModelCapabilities
+from agents.chatgpt_plan import ChatGPTPlanChatModel
+from infra.chatgpt_auth import ChatGPTAccounts
 from agents.model_capabilities import ContextWindow, get_context_window
 from agents.prompts import PromptProfile, resolve_prompt_profile
 from infra.monitoring.callbacks import MONITORING_CALLBACK
@@ -136,6 +138,15 @@ class LLMConfig:
 
 # Define supported providers in priority order
 LLM_PROVIDERS = {
+    "chatgpt_plan": LLMConfig(
+        chat_class=ChatGPTPlanChatModel,
+        selection_envs=["CHATGPT_PLAN_AUTH_FILE"],
+        agent_model="gpt-6.1-sol",
+        extra_args={
+            "auth_file": lambda: os.environ.get("CHATGPT_PLAN_AUTH_FILE", ""),
+            "timeout": LLMDefaults.REQUEST_TIMEOUT_SECONDS,
+        },
+    ),
     "openai": LLMConfig(
         chat_class=ChatOpenAI,
         selection_envs=["OPENAI_API_KEY", "OPENAI_BASE_URL"],
@@ -360,14 +371,14 @@ def _initialize_llm(
 
     logger.info(f"Using {name.title()} LLM with model: {model_name}")
 
-    kwargs: dict[str, Any] = {"model": model_name}
-    if _model_accepts_temperature(model_name):
+    kwargs: dict[str, Any] = {"model_name" if name == "chatgpt_plan" else "model": model_name}
+    if name != "chatgpt_plan" and _model_accepts_temperature(model_name):
         kwargs["temperature"] = config.agent_temperature
     kwargs.update(config.get_resolved_extra_args())
 
     # ChatBedrockConverse and ChatOllama take no api_key kwarg; their SDKs read
     # AWS_BEARER_TOKEN_BEDROCK / OLLAMA_API_KEY from the environment directly.
-    if name not in ["aws", "ollama"]:
+    if name not in ["aws", "ollama", "chatgpt_plan"]:
         api_key = config.get_api_key()
         kwargs["api_key"] = api_key or "no-key-required"
 
@@ -420,6 +431,8 @@ def validate_api_key_provided() -> None:
 
     (name,) = selected
     config = LLM_PROVIDERS[name]
+    if name == "chatgpt_plan":
+        ChatGPTAccounts().profile()
     if config.keyless_capable and not config.has_real_api_key():
         logger.warning(
             "Provider '%s' is selected via a base URL with no %s set; "

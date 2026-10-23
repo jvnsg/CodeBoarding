@@ -44,6 +44,7 @@ _PROVIDER_SECRETS: dict[str, str] = {
 # Endpoints with no built-in default — the user must say where the server is.
 # Defaulted base URLs (vercel, deepseek, glm, kimi) are shell-override-only on purpose.
 _PROVIDER_ENDPOINTS: dict[str, str] = {
+    "chatgpt_plan_auth_file": "CHATGPT_PLAN_AUTH_FILE",
     "openai_base_url": "OPENAI_BASE_URL",
     "ollama_base_url": "OLLAMA_BASE_URL",
     "litellm_base_url": "LITELLM_BASE_URL",
@@ -72,6 +73,7 @@ CONFIG_TEMPLATE = """\
 # Shell environment variables always take precedence over this file.
 
 [provider]
+# chatgpt_plan_auth_file    = "~/.codeboarding/chatgpt/accounts.json"  # run: codeboarding auth chatgpt login
 # openai_api_key            = "sk-..."
 # openai_base_url           = "http://localhost:8000/v1"   # self-hosted / OpenAI-compatible proxy
 # anthropic_api_key         = "sk-ant-..."
@@ -110,6 +112,7 @@ CONFIG_TEMPLATE = """\
 class ProviderUserConfig:
     """Raw API key / URL values read from [provider] in config.toml."""
 
+    chatgpt_plan_auth_file: str | None = None
     openai_api_key: str | None = None
     openai_base_url: str | None = None
     anthropic_api_key: str | None = None
@@ -174,6 +177,7 @@ def load_user_config(path: Path = CONFIG_PATH) -> UserConfig:
 
     return UserConfig(
         provider=ProviderUserConfig(
+            chatgpt_plan_auth_file=provider_data.get("chatgpt_plan_auth_file") or None,
             openai_api_key=provider_data.get("openai_api_key") or None,
             openai_base_url=provider_data.get("openai_base_url") or None,
             anthropic_api_key=provider_data.get("anthropic_api_key") or None,
